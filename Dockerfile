@@ -1,5 +1,5 @@
 # 1. Base PHP image
-FROM php:8.2-fpm
+FROM php:7.4-fpm
 
 # 2. Set working directory
 WORKDIR /var/www
