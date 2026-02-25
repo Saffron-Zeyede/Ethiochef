@@ -31,8 +31,11 @@ RUN composer install --no-dev --optimize-autoloader
 RUN npm install && npm run prod
 
 # 8. Set permissions for Laravel
-RUN chown -R www-data:www-data /var/www \
-    && chmod -R 755 /var/www/storage
+RUN mkdir -p /var/www/storage \
+    && mkdir -p /var/www/bootstrap/cache \
+    && chown -R www-data:www-data /var/www \
+    && chmod -R 775 /var/www/storage \
+    && chmod -R 775 /var/www/bootstrap/cache
 
 # 9. Expose port 9000 for PHP-FPM
 EXPOSE 9000
