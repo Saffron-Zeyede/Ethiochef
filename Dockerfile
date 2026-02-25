@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install
 COPY . .
-RUN npm run prod   # ← change to npm run build if your script is named "build"
+RUN npm run prod  # change to npm run build if your script is named "build"
 
 # Stage 2: PHP 8.0 + Nginx + PostgreSQL support (compatible with Laravel 7/8)
 FROM php:8.0-fpm-alpine
@@ -21,19 +21,18 @@ RUN apk update && apk add --no-cache \
     libxml2-dev \
     zip \
     unzip \
-    postgresql-dev \          # ← This is crucial for pdo_pgsql
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install \
+    postgresql-dev && \
+    docker-php-ext-configure gd --with-freetype --with-jpeg && \
+    docker-php-ext-install \
         pdo \
-        pdo_pgsql \           # ← Replace pdo_mysql with pdo_pgsql
-        pgsql \               # ← Optional but recommended (full pgsql extension)
+        pdo_pgsql \
+        pgsql \
         mbstring \
         exif \
         pcntl \
         bcmath \
-        gd \
-    && apk del --no-cache .build-deps \  # Optional: clean up build deps if you add $PHPIZE_DEPS later
-    && rm -rf /var/cache/apk/*
+        gd && \
+    rm -rf /var/cache/apk/*
 
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
