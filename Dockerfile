@@ -1,29 +1,35 @@
-# Working base for Laravel 7 + PHP 8.2 (compatible enough)
+# Base image with nginx + PHP-FPM (compatible with Laravel 7)
 FROM richarvey/nginx-php-fpm:3.1.6
 
-# Working directory
+# Set working directory
 WORKDIR /var/www/html
 
-# Copy full project first
+# Copy the entire project
 COPY . .
 
-# Create cache dirs early + set permissions (prevents write failures)
-RUN mkdir -p bootstrap/cache \
+# Create all required Laravel directories and set permissions early
+RUN mkdir -p \
+    storage/app/public \
+    storage/framework/cache \
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/logs \
+    bootstrap/cache \
     && chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
-# Install dependencies (as root, but ownership fixed above)
+# Install Composer dependencies — skip scripts to prevent early artisan failure
 RUN composer install \
     --no-interaction \
     --no-dev \
     --prefer-dist \
     --optimize-autoloader \
-    --no-scripts   # ← IMPORTANT: Skip post-autoload-dump / package:discover here!
+    --no-scripts
 
-# Build frontend if needed
+# Build frontend assets if package.json exists
 RUN if [ -f package.json ]; then npm install && npm run prod; fi
 
-# Ensure final permissions
+# Final permissions check
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
@@ -31,6 +37,8 @@ RUN chown -R www-data:www-data /var/www/html \
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
+# Port that nginx listens on inside the container
 EXPOSE 80
 
+# Start the application with our custom script
 CMD ["/start.sh"]
