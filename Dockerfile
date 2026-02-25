@@ -1,4 +1,4 @@
-# Stage 1: Build frontend assets with Node 16 (fixes previous MD4 issue)
+# Stage 1: Build frontend assets with Node 16 (compatible with old Laravel Mix)
 FROM node:16-alpine AS assets
 
 WORKDIR /app
@@ -8,20 +8,20 @@ COPY package.json package-lock.json* ./
 RUN npm install
 
 COPY . .
-RUN npm run prod   # Adjust to npm run build if your script is "build"
+RUN npm run prod   # Change to "npm run build" if your package.json uses "build" instead of "prod"
 
 # Stage 2: PHP 8.0 + nginx + php-fpm (compatible with Laravel 7)
-FROM richarvey/nginx-php-fpm:2.1-php8.0   # Older tag with PHP 8.0
+FROM richarvey/nginx-php-fpm:2.1-php8.0
 
 WORKDIR /var/www/html
 
-# Copy built assets
+# Copy built assets from the Node stage
 COPY --from=assets /app/public /var/www/html/public
 
-# Copy Laravel project
+# Copy the full Laravel project
 COPY . .
 
-# Create directories + permissions
+# Create required Laravel directories and set permissions
 RUN mkdir -p \
     storage/app/public \
     storage/framework/cache \
@@ -32,7 +32,7 @@ RUN mkdir -p \
     && chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
-# Composer install (skip scripts)
+# Install PHP dependencies (skip post-install scripts)
 RUN composer install \
     --no-interaction \
     --no-dev \
@@ -40,10 +40,11 @@ RUN composer install \
     --optimize-autoloader \
     --no-scripts
 
-# Final permissions
+# Final permissions check
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
+# Copy startup script
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
