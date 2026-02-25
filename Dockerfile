@@ -30,12 +30,15 @@ RUN composer install --no-dev --optimize-autoloader
 # 7. Install Node dependencies and build assets
 RUN npm install && npm run prod
 
-# 8. Set permissions for Laravel
+# Create storage and database folders and the SQLite file
 RUN mkdir -p /var/www/storage \
     && mkdir -p /var/www/bootstrap/cache \
+    && mkdir -p /var/www/database \
+    && touch /var/www/database/database.sqlite \
     && chown -R www-data:www-data /var/www \
     && chmod -R 775 /var/www/storage \
-    && chmod -R 775 /var/www/bootstrap/cache
+    && chmod -R 775 /var/www/bootstrap/cache \
+    && chmod -R 775 /var/www/database
 
 # 9. Expose port 9000 for PHP-FPM
 EXPOSE 9000
