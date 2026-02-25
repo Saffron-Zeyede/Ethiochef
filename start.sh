@@ -1,9 +1,16 @@
 #!/bin/sh
 set -e
 
-echo "→ Fixing permissions..."
-chown -R www-data:www-data storage bootstrap/cache
-chmod -R 775 storage bootstrap/cache
+echo "→ Fixing permissions (force chown + chmod)..."
+chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+chmod -R 775 /var/www/html/storage/logs  # extra for logs folder
+chmod -R 664 /var/www/html/storage/logs/*.log  # make log files writable
+
+# Create log file if missing
+touch /var/www/html/storage/logs/laravel.log
+chown www-data:www-data /var/www/html/storage/logs/laravel.log
+chmod 664 /var/www/html/storage/logs/laravel.log
 
 echo "→ Clearing caches..."
 php artisan config:clear   || true
