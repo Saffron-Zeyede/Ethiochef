@@ -1,51 +1,31 @@
-# 1. Base PHP image
-FROM php:7.4-fpm
+# Use a solid Laravel-ready image with nginx + php-fpm
+FROM richarvey/nginx-php-fpm:3.1.3-php8.2
 
-# 2. Set working directory
-WORKDIR /var/www
+# Set working directory (this image uses /var/www/html)
+WORKDIR /var/www/html
 
-# 3. Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    curl \
-    libpng-dev \
-    libonig-dev \
-    libxml2-dev \
-    zip \
-    unzip \
-    mariadb-server \
-    mariadb-client \
-    npm \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+# Copy composer files first → better caching
+COPY composer.json composer.lock ./
 
-# 4. Install Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+# Install PHP dependencies (production mode)
+RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
 
-# 5. Copy project files
+# Copy the rest of the application
 COPY . .
 
-# 6. Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader
-
-# 7. Install Node dependencies and build assets
+# Install npm dependencies and build assets
 RUN npm install && npm run prod
 
-# Create storage and database folders and the SQLite file
-# Make necessary directories
-RUN mkdir -p /var/www/storage \
-    && mkdir -p /var/www/bootstrap/cache \
-    && mkdir -p /var/www/database \
-    && touch /var/www/database/database.sqlite \
-    && chown -R www-data:www-data /var/www \
-    && chmod -R 775 /var/www/storage \
-    && chmod -R 775 /var/www/bootstrap/cache \
-    && chmod -R 775 /var/www/database
+# Set permissions for Laravel storage & cache
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 775 storage bootstrap/cache
 
-# Start Laravel
-CMD php artisan serve --host=0.0.0.0 --port=10000
+# Copy our custom start script
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
 
-# 9. Expose port 9000 for PHP-FPM
-EXPOSE 9000
+# Expose port (nginx inside container listens on 80, Render forwards to 10000)
+EXPOSE 80
 
-# 10. Start both MySQL and PHP-FPM
-CMD service mysql start && php artisan migrate --force && php-fpm
+# Use our start script as entrypoint
+CMD ["/start.sh"]
