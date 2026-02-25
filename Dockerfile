@@ -31,6 +31,7 @@ RUN composer install --no-dev --optimize-autoloader
 RUN npm install && npm run prod
 
 # Create storage and database folders and the SQLite file
+# Make necessary directories
 RUN mkdir -p /var/www/storage \
     && mkdir -p /var/www/bootstrap/cache \
     && mkdir -p /var/www/database \
@@ -39,6 +40,9 @@ RUN mkdir -p /var/www/storage \
     && chmod -R 775 /var/www/storage \
     && chmod -R 775 /var/www/bootstrap/cache \
     && chmod -R 775 /var/www/database
+
+# Start Laravel
+CMD php artisan serve --host=0.0.0.0 --port=10000
 
 # 9. Expose port 9000 for PHP-FPM
 EXPOSE 9000
