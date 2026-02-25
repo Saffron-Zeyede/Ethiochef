@@ -1,15 +1,15 @@
-# Stage 1: Build frontend assets (Node 16 to avoid MD4/OpenSSL issues)
+# Stage 1: Build frontend assets
 FROM node:16-alpine AS assets
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install
 COPY . .
-RUN npm run prod  # change to npm run build if your script is named "build"
+RUN npm run prod  # or npm run build
 
-# Stage 2: PHP 8.0 + Nginx + PostgreSQL support (compatible with Laravel 7/8)
+# Stage 2: PHP 8.0 + Nginx + PostgreSQL
 FROM php:8.0-fpm-alpine
 
-# Install system dependencies + Nginx + PostgreSQL client libs
+# Install deps + PostgreSQL support
 RUN apk update && apk add --no-cache \
     nginx \
     git \
@@ -21,9 +21,10 @@ RUN apk update && apk add --no-cache \
     libxml2-dev \
     zip \
     unzip \
-    postgresql-dev && \
-    docker-php-ext-configure gd --with-freetype --with-jpeg && \
-    docker-php-ext-install \
+    postgresql-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-configure pgsql -with-pgsql=/usr/local/pgsql \
+    && docker-php-ext-install \
         pdo \
         pdo_pgsql \
         pgsql \
@@ -31,51 +32,38 @@ RUN apk update && apk add --no-cache \
         exif \
         pcntl \
         bcmath \
-        gd && \
-    rm -rf /var/cache/apk/*
+        gd \
+    && apk del --no-cache .build-deps 2>/dev/null || true \
+    && rm -rf /var/cache/apk/*
 
-# Install Composer
+# Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Set working directory
 WORKDIR /var/www/html
 
-# Copy built assets from Node stage
 COPY --from=assets /app/public /var/www/html/public
-
-# Copy Laravel project
 COPY . .
 
-# Create Laravel directories + permissions
+# Laravel dirs + perms
 RUN mkdir -p \
     storage/app/public \
-    storage/framework/cache \
-    storage/framework/sessions \
-    storage/framework/views \
+    storage/framework/{cache,sessions,views} \
     storage/logs \
     bootstrap/cache \
     && chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
-# Install PHP dependencies
-RUN composer install \
-    --no-interaction \
-    --no-dev \
-    --prefer-dist \
-    --optimize-autoloader \
-    --no-scripts
+# Composer install
+RUN composer install --no-interaction --no-dev --prefer-dist --optimize-autoloader --no-scripts
 
-# Final permissions (run again in case)
+# Re-apply perms
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
-# Copy startup script
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
-# Nginx config (simple default for Laravel)
 COPY nginx.conf /etc/nginx/http.d/default.conf
 
 EXPOSE 80
-
 CMD ["/start.sh"]
