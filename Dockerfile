@@ -1,13 +1,29 @@
-# Base image with nginx + PHP-FPM (compatible with Laravel 7)
+# Stage 1: Build frontend assets with Node
+FROM node:18-alpine AS assets
+
+WORKDIR /app
+
+# Copy only package files first for caching
+COPY package.json package-lock.json* ./
+
+RUN npm install
+
+# Copy the rest and build
+COPY . .
+RUN npm run prod   # or npm run build if your script is named differently
+
+# Stage 2: Final PHP + Nginx image
 FROM richarvey/nginx-php-fpm:3.1.6
 
-# Set working directory
 WORKDIR /var/www/html
 
-# Copy the entire project
+# Copy built assets from Node stage
+COPY --from=assets /app/public /var/www/html/public
+
+# Copy the entire Laravel project
 COPY . .
 
-# Create all required Laravel directories and set permissions early
+# Create required directories and set permissions
 RUN mkdir -p \
     storage/app/public \
     storage/framework/cache \
@@ -18,7 +34,7 @@ RUN mkdir -p \
     && chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
-# Install Composer dependencies — skip scripts to prevent early artisan failure
+# Install Composer dependencies (skip scripts to avoid early artisan issues)
 RUN composer install \
     --no-interaction \
     --no-dev \
@@ -26,10 +42,7 @@ RUN composer install \
     --optimize-autoloader \
     --no-scripts
 
-# Build frontend assets if package.json exists
-RUN if [ -f package.json ]; then npm install && npm run prod; fi
-
-# Final permissions check
+# Final permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
@@ -37,8 +50,6 @@ RUN chown -R www-data:www-data /var/www/html \
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
-# Port that nginx listens on inside the container
 EXPOSE 80
 
-# Start the application with our custom script
 CMD ["/start.sh"]
