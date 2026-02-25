@@ -1,31 +1,35 @@
-# Use a solid Laravel-ready image with nginx + php-fpm
-FROM richarvey/nginx-php-fpm:3.1.3-php8.2
+# Use a working Laravel-ready image with nginx + php-fpm (PHP 8.2)
+FROM richarvey/nginx-php-fpm:3.1.6
 
 # Set working directory (this image uses /var/www/html)
 WORKDIR /var/www/html
 
-# Copy composer files first → better caching
-COPY composer.json composer.lock ./
+# Copy composer files first → better layer caching
+COPY composer.json composer.lock* ./
 
-# Install PHP dependencies (production mode)
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+# Install PHP dependencies (production)
+RUN composer install \
+    --no-interaction \
+    --no-dev \
+    --prefer-dist \
+    --optimize-autoloader
 
 # Copy the rest of the application
 COPY . .
 
-# Install npm dependencies and build assets
+# Install npm dependencies and build frontend assets
 RUN npm install && npm run prod
 
-# Set permissions for Laravel storage & cache
+# Set proper permissions for Laravel
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
-# Copy our custom start script
+# Copy our custom startup script
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
-# Expose port (nginx inside container listens on 80, Render forwards to 10000)
+# Expose the port nginx listens on inside the container
 EXPOSE 80
 
-# Use our start script as entrypoint
+# Start with our custom script
 CMD ["/start.sh"]
