@@ -1,15 +1,15 @@
-# Stage 1: Build frontend assets (if you have Vite/Mix/Laravel frontend)
+# Stage 1: Frontend assets build (Vite/Mix/Laravel frontend)
 FROM node:16-alpine AS assets
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
 COPY . .
-RUN npm run prod   # ← Change to "npm run build" if that's your script name
+RUN npm run prod   # Change to npm run build if your package.json uses "build"
 
-# Stage 2: PHP + Nginx + PostgreSQL support
+# Stage 2: PHP 8.0 FPM + Nginx + Postgres
 FROM php:8.0-fpm-alpine
 
-# Install dependencies and PostgreSQL extensions
+# Install build deps + runtime deps + Postgres client libs
 RUN apk add --no-cache --virtual .build-deps \
         $PHPIZE_DEPS \
         postgresql-dev \
@@ -43,32 +43,33 @@ RUN apk add --no-cache --virtual .build-deps \
     )" \
     && apk add --no-cache --virtual .php-rundeps $runDeps \
     && apk del .build-deps \
-    && rm -rf /var/cache/apk/*
+    && rm -rf /var/cache/apk/* \
+    # Fail build if pdo_pgsql didn't install
+    && php -m | grep -q pdo_pgsql || (echo "ERROR: pdo_pgsql extension not loaded after install!" && exit 1)
 
-# Install Composer
+# Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Set working directory
 WORKDIR /var/www/html
 
-# Copy built assets from Node stage
+# Copy assets
 COPY --from=assets /app/public /var/www/html/public
 
-# Copy application code
+# Copy app code
 COPY . .
 
-# Create necessary Laravel directories and set permissions
+# Create Laravel required dirs + permissions
 RUN mkdir -p \
-    storage/app/public \
-    storage/framework/cache \
-    storage/framework/sessions \
-    storage/framework/views \
-    storage/logs \
-    bootstrap/cache \
+        storage/app/public \
+        storage/framework/cache \
+        storage/framework/sessions \
+        storage/framework/views \
+        storage/logs \
+        bootstrap/cache \
     && chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
-# Install PHP dependencies
+# Composer install
 RUN composer install \
     --no-interaction \
     --no-dev \
@@ -76,26 +77,23 @@ RUN composer install \
     --optimize-autoloader \
     --no-scripts
 
-# Re-apply permissions (after composer install)
+# Re-apply permissions after composer
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
-# Clear and optimize Laravel caches during build
+# Clear caches during build
 RUN php artisan config:clear \
     && php artisan cache:clear \
     && php artisan route:clear \
     && php artisan view:clear \
     && php artisan optimize || true
 
-# Copy your startup script
+# Startup script & Nginx config
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
-# Copy Nginx configuration
 COPY nginx.conf /etc/nginx/http.d/default.conf
 
-# Expose port
 EXPOSE 80
 
-# Start services
 CMD ["/start.sh"]
