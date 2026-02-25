@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -e
 
-echo "→ Fixing permissions (just in case)..."
+echo "→ Fixing permissions..."
 chown -R www-data:www-data storage bootstrap/cache
 chmod -R 775 storage bootstrap/cache
 
-echo "→ Clearing previous caches..."
+echo "→ Clearing caches..."
 php artisan config:clear   || true
 php artisan route:clear    || true
 php artisan view:clear     || true
@@ -19,7 +19,8 @@ echo "→ Discovering packages..."
 php artisan package:discover --ansi
 
 echo "→ Running migrations..."
-php artisan migrate --force --no-interaction || echo "→ No migrations to run or skipped"
+php artisan migrate --force --no-interaction || echo "→ No migrations or skipped"
 
-echo "→ Starting PHP-FPM..."
+echo "→ Starting services..."
+nginx -g 'daemon off;' &
 exec php-fpm

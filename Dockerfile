@@ -1,4 +1,4 @@
-# Stage 1: Build frontend assets with Node 16 (compatible with old Laravel Mix)
+# Stage 1: Build frontend assets (Node 16 to avoid MD4/OpenSSL issues)
 FROM node:16-alpine AS assets
 
 WORKDIR /app
@@ -8,20 +8,40 @@ COPY package.json package-lock.json* ./
 RUN npm install
 
 COPY . .
-RUN npm run prod   # Change to "npm run build" if your package.json uses "build" instead of "prod"
+RUN npm run prod   # change to npm run build if your script is named "build"
 
-# Stage 2: PHP 8.0 + nginx + php-fpm (compatible with Laravel 7)
-FROM richarvey/nginx-php-fpm:2.1-php8.0
+# Stage 2: PHP 8.0 + Nginx (compatible with Laravel 7)
+FROM php:8.0-fpm-alpine
 
+# Install system dependencies + Nginx
+RUN apk update && apk add --no-cache \
+    nginx \
+    git \
+    curl \
+    libpng-dev \
+    libjpeg-turbo-dev \
+    freetype-dev \
+    oniguruma-dev \
+    libxml2-dev \
+    zip \
+    unzip \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd \
+    && rm -rf /var/cache/apk/*
+
+# Install Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# Set working directory
 WORKDIR /var/www/html
 
-# Copy built assets from the Node stage
+# Copy built assets from Node stage
 COPY --from=assets /app/public /var/www/html/public
 
-# Copy the full Laravel project
+# Copy Laravel project
 COPY . .
 
-# Create required Laravel directories and set permissions
+# Create Laravel directories + permissions
 RUN mkdir -p \
     storage/app/public \
     storage/framework/cache \
@@ -32,7 +52,7 @@ RUN mkdir -p \
     && chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
-# Install PHP dependencies (skip post-install scripts)
+# Install PHP dependencies
 RUN composer install \
     --no-interaction \
     --no-dev \
@@ -40,13 +60,16 @@ RUN composer install \
     --optimize-autoloader \
     --no-scripts
 
-# Final permissions check
+# Final permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 storage bootstrap/cache
 
 # Copy startup script
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
+
+# Nginx config (simple default for Laravel)
+COPY nginx.conf /etc/nginx/http.d/default.conf
 
 EXPOSE 80
 
