@@ -13,8 +13,8 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-// Homepage route (this fixes the 404 on /)
-Route::get('/', 'EthiochefController@ethiochef')->name('home');
+// Homepage (root URL) - renamed to 'homepage' to avoid duplicate
+Route::get('/', 'EthiochefController@ethiochef')->name('homepage');
 
 // Authentication routes (login, register, etc.)
 Auth::routes();
@@ -31,7 +31,7 @@ Route::post('contact/send', 'EthiochefController@message')->name('message.send')
 
 // Authenticated admin routes
 Route::middleware(['auth'])->group(function () {
-    Route::get('/admin/home', 'HomeController@index')->name('home');
+    Route::get('/admin/home', 'HomeController@index')->name('admin.home');  // Changed from 'home' to 'admin.home'
     Route::get('/admin/dashboard', 'DashboardController@index')->name('admin.dashboard');
 
     Route::resource('/admin/categories', 'CategoriesController');
