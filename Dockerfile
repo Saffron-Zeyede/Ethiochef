@@ -4,35 +4,30 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 COPY . .
-RUN npm run prod   # change to npm run build if needed
+RUN npm run prod  # Change to npm run build if your script is named "build"
 
-# Stage 2: PHP + Nginx + PostgreSQL
+# Stage 2: PHP 8.0 FPM + Nginx + PostgreSQL support
 FROM php:8.0-fpm-alpine
 
-# Install build tools + PostgreSQL client libraries + runtime deps
-RUN apk add --no-cache --virtual .build-deps \
-        autoconf \
-        dpkg-dev \
-        dpkg \
-        file \
-        g++ \
-        gcc \
-        libc-dev \
-        make \
-        pkgconf \
-        re2c \
-        postgresql-dev \
-    && apk add --no-cache \
-        nginx \
-        git \
-        curl \
-        libpng-dev \
-        libjpeg-turbo-dev \
-        freetype-dev \
-        oniguruma-dev \
-        libxml2-dev \
-        zip \
-        unzip \
+# Install full build tools + PostgreSQL dev + runtime packages
+RUN apk update && apk add --no-cache \
+    autoconf \
+    g++ \
+    gcc \
+    make \
+    pkgconf \
+    re2c \
+    postgresql-dev \
+    nginx \
+    git \
+    curl \
+    libpng-dev \
+    libjpeg-turbo-dev \
+    freetype-dev \
+    oniguruma-dev \
+    libxml2-dev \
+    zip \
+    unzip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-configure pgsql -with-pgsql=/usr/local/pgsql \
     && docker-php-ext-install -j$(nproc) \
@@ -44,27 +39,24 @@ RUN apk add --no-cache --virtual .build-deps \
         pcntl \
         bcmath \
         gd \
-    && runDeps="$( \
-        scanelf --needed --nobanner --format '%n#p' --recursive /usr/local/lib/php/extensions \
-            | tr ',' '\n' \
-            | sort -u \
-            | awk 'system("[ -e /usr/local/lib/" $1 " ]") == 0 { next } { print "so:" $1 }' \
-    )" \
-    && apk add --no-cache --virtual .php-rundeps $runDeps \
-    && apk del .build-deps \
-    && rm -rf /var/cache/apk/* \
-    # Fail fast if pdo_pgsql is missing
-    && php -m | grep -q pdo_pgsql || (echo "ERROR: pdo_pgsql extension failed to install" && exit 1)
+    && apk del --no-cache autoconf g++ gcc make pkgconf re2c \
+    && rm -rf /var/cache/apk/* /tmp/* \
+    # Fail the build if pdo_pgsql is not loaded
+    && php -m | grep -q pdo_pgsql || (echo "ERROR: pdo_pgsql extension is not loaded after installation!" && exit 1)
 
-# Composer
+# Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# Set working directory
 WORKDIR /var/www/html
 
+# Copy built assets
 COPY --from=assets /app/public /var/www/html/public
+
+# Copy application code
 COPY . .
 
-# Create Laravel directories + fix permissions
+# Create Laravel directories and set permissions
 RUN mkdir -p \
     storage/app/public \
     storage/framework/cache \
@@ -94,6 +86,7 @@ RUN php artisan config:clear \
     && php artisan view:clear \
     && php artisan optimize || true
 
+# Startup script and Nginx config
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
